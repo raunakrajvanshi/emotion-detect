@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Emotion Detection</title>
+    <style>
+        video {
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <h1>Real-time Emotion Detection</h1>
+    <video id="video" width="640" height="480" autoplay></video>
+    <h2 id="emotion">Detecting...</h2>
+
+    <script>
+        const video = document.getElementById('video');
+        const emotionElement = document.getElementById('emotion');
+
+        // Prompt the user for permission to use the webcam
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(err => {
+                console.error('Error accessing the webcam: ' + err);
+            });
+
+        // Function to capture a frame from the video
+        function captureFrame() {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const context = canvas.getContext('2d');
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL('image/jpeg');
+        }
+
+        // Convert data URL to Blob
+        function dataURLToBlob(dataURL) {
+            const binaryString = atob(dataURL.split(',')[1]);
+            const array = [];
+            for (let i = 0; i < binaryString.length; i++) {
+                array.push(binaryString.charCodeAt(i));
+            }
+            return new Blob([new Uint8Array(array)], { type: 'image/jpeg' });
+        }
+
+        // Function to send the frame to the server and get the prediction
+        async function sendFrame() {
+            const frame = captureFrame();
+            const blob = dataURLToBlob(frame);
+            try {
+                const response = await fetch('http://127.0.0.1:5000/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/octet-stream'
+                    },
+                    body: blob
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                emotionElement.textContent = `Emotion: ${data.emotion}`;
+            } catch (error) {
+                console.error('Error:', error);
+                emotionElement.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // Capture and send a frame every second
+        setInterval(sendFrame, 2000);
+    </script>
+</body>
+</html>
